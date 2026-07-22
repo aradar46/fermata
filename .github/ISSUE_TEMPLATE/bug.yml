@@ -1,0 +1,85 @@
+name: Bug report
+description: Fermata did something wrong, crashed, or got stuck.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If a step *runs* but behaves differently than it does on GitHub's
+        runners, please use the **parity gap** template instead — those are
+        usually a different problem.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, what you got. Paste the output.
+      placeholder: |
+        $ fermata run -W .github/workflows/ci.yml
+        ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: workflow
+    attributes:
+      label: The workflow file
+      description: >
+        The `.github/workflows/*.yml` you ran, or the smallest version that
+        still shows the problem. Redact secrets — never paste real values.
+      render: yaml
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Fermata version
+      description: "`fermata --version`, or the commit you built from."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows (WSL2)
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: docker
+    attributes:
+      label: Docker variant
+      description: >
+        Asked because container behaviour differs meaningfully between these,
+        and it is the most common cause of a report nobody else can reproduce.
+      options:
+        - Docker Engine (Linux)
+        - Docker Desktop
+        - Colima
+        - Podman
+        - Rancher Desktop
+        - OrbStack
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: docker-version
+    attributes:
+      label: Docker version
+      description: "`docker version --format '{{.Server.Version}}'`"
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I read the "What it can and can't do" section of the README.
+          required: true

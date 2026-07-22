@@ -1,0 +1,12 @@
+name: demo
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: step one ok
+        run: echo "one" > /tmp/marker.txt && echo STEP-1-RAN
+      - name: step two FAILS
+        run: echo STEP-2-RAN && exit 7
+      - name: step three
+        run: echo STEP-3-RAN

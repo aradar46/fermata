@@ -1,0 +1,12 @@
+# built binary
+/fermata
+
+# local test workflow output / scratch
+/tmp/
+
+# secret files passed via --secret-file: never commit these
+.secrets
+*.secrets
+
+# internal notes
+/.local-notes/

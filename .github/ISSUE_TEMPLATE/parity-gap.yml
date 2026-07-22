@@ -1,0 +1,63 @@
+name: Parity gap
+description: A step behaves differently under fermata than on GitHub's runners.
+labels: [parity]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Fermata runs your workflow in a container on your machine. GitHub runs
+        it on their runner image, in their network, with their services. Those
+        differ, and some differences cannot be closed — a step that needs
+        GitHub's OIDC or cache service has nothing to talk to locally.
+
+        This template exists because those reports *look* like fermata bugs and
+        often aren't. Filing them here still helps: known gaps get detected and
+        explained at the pause instead of confusing the next person.
+
+  - type: textarea
+    id: difference
+    attributes:
+      label: What differs
+      description: What the step does on GitHub, and what it does under fermata.
+      placeholder: |
+        On GitHub: the build succeeds.
+        Under fermata: fails with "SDK location not found".
+    validations:
+      required: true
+
+  - type: textarea
+    id: step
+    attributes:
+      label: The step
+      description: The workflow step in question. Redact secrets.
+      render: yaml
+    validations:
+      required: true
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: What do you think is missing?
+      options:
+        - Tooling absent from the container image (SDK, compiler, CLI)
+        - Needs a GitHub service (OIDC, cache, artifacts)
+        - Runner environment differs (paths, env vars, preinstalled software)
+        - Network or DNS behaviour
+        - Not sure
+    validations:
+      required: true
+
+  - type: input
+    id: image
+    attributes:
+      label: Image used
+      description: >
+        Default is `catthehacker/ubuntu:act-latest`. If you passed `-P`, put
+        your image here.
+
+  - type: markdown
+    attributes:
+      value: |
+        **Worth trying first:** many image gaps are solved by pointing fermata
+        at an image that has the tooling —
+        `-P ubuntu-latest=your/image:tag`.

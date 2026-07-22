@@ -1,0 +1,32 @@
+name: CI
+on: push
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          echo "Installing 412 packages..."
+          sleep 12
+          echo "added 412 packages in 12s"
+
+      - name: Build
+        run: |
+          echo "Building..."
+          sleep 10
+          echo "Build complete in 10s"
+
+      - name: Run tests
+        run: node src/cart.test.js
+
+      - name: Publish
+        run: echo "Published!"

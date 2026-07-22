@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l cmd internal main.go)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./cmd/... ./internal/... .
+
+      - name: Test
+        run: go test ./internal/... -race -count=1
+
+      - name: Build
+        run: go build -o fermata .
+
+      # The vendored act fork is the project's biggest maintenance risk, so
+      # prove on every push that it still builds and that the published patch
+      # series still applies to a clean upstream checkout.
+      - name: Verify the act fork patch still applies upstream
+        run: |
+          git clone --quiet --depth 1 --branch v0.2.89 \
+            https://github.com/nektos/act.git /tmp/act-clean
+          cd /tmp/act-clean
+          git apply --check "$GITHUB_WORKSPACE/docs/fork/fermata-act-patches.patch"
+          echo "patch applies cleanly to a fresh v0.2.89"
+
+  macos-smoke:
+    name: macOS builds and launches
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      # Deliberately NOT end-to-end: macOS runners cannot run Linux containers,
+      # so a real workflow can't execute here. This proves the narrower claim
+      # the README makes — that Fermata compiles natively on macOS and starts.
+      # Anything beyond that stays "untested" until a human reports back.
+      - name: Build and launch
+        run: |
+          go build -o fermata .
+          ./fermata --version
+          ./fermata --help > /dev/null
+          echo "macOS: builds and launches"

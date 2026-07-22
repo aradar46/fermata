@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or idea
+    url: https://github.com/aradar46/fermata/discussions
+    about: For anything that isn't a bug report. Please check CONTRIBUTING.md first — some things are deliberately out of scope.
