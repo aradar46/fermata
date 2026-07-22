@@ -50,6 +50,21 @@ func newRootCmd() *cobra.Command {
 	runCmd := &cobra.Command{
 		Use:   "run",
 		Short: "Run a workflow locally, pausing at breakpoints or on failure",
+		Long: "Run a workflow locally, pausing at breakpoints or on failure.\n\n" +
+			"At a pause the job container is still alive. Type `shell` to look\n" +
+			"inside it, fix the problem, then `retry` to re-run only that step.",
+		Example: "  # Pause wherever a step fails\n" +
+			"  fermata run -W .github/workflows/ci.yml\n\n" +
+			"  # Fix source files while paused and have retry pick them up\n" +
+			"  fermata run -W .github/workflows/ci.yml --bind\n\n" +
+			"  # Stop at a specific step instead of waiting for a failure\n" +
+			"  fermata run -W .github/workflows/ci.yml --break \"Run tests\"\n\n" +
+			"  # A workflow that does not trigger on push, with secrets\n" +
+			"  fermata run -W .github/workflows/deploy.yml \\\n" +
+			"      --event workflow_dispatch --secret-file .secrets\n\n" +
+			"  # One matrix leg, on an image that has your tooling\n" +
+			"  fermata run -W .github/workflows/ci.yml \\\n" +
+			"      --matrix python:3.12 -P ubuntu-latest=my/image:tag",
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if workflow == "" {
 				return fmt.Errorf("no workflow given: use -W <path-to-workflow.yml>")
@@ -124,8 +139,83 @@ func newRootCmd() *cobra.Command {
 	runCmd.Flags().BoolVar(&bind, "bind", false, "bind-mount the working directory instead of copying it, so edits you make while paused are visible to `retry`")
 	runCmd.Flags().BoolVar(&reuse, "reuse", false, "keep the job container after the run so tool caches (Gradle, Maven, pip) survive to the next run")
 
+	registerCompletions(runCmd, &workflow)
+
 	root.AddCommand(runCmd)
 	return root
+}
+
+// registerCompletions teaches the shell to suggest values, not just flag names.
+//
+// Without this, `--break <TAB>` offers filenames, which is actively misleading:
+// the flag takes a step id or name, and the only way to get one right is to
+// open the YAML and copy a string with spaces in it exactly. workflow points at
+// the -W value so step completion can read the file the user already chose.
+func registerCompletions(runCmd *cobra.Command, workflow *string) {
+	noFiles := cobra.ShellCompDirectiveNoFileComp
+
+	_ = runCmd.RegisterFlagCompletionFunc("workflow",
+		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			files := engine.WorkflowFiles(".")
+			if len(files) == 0 {
+				// No .github/workflows here: fall back to normal file
+				// completion rather than insisting the directory is empty.
+				return nil, cobra.ShellCompDirectiveDefault
+			}
+			return files, noFiles
+		})
+
+	_ = runCmd.RegisterFlagCompletionFunc("break",
+		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			wf := *workflow
+			if wf == "" {
+				// -W has not been typed yet. One workflow in the repo means
+				// there is no ambiguity about which file to read.
+				if files := engine.WorkflowFiles("."); len(files) == 1 {
+					wf = files[0]
+				}
+			}
+			if wf == "" {
+				return nil, noFiles
+			}
+			return engine.StepNames(wf), noFiles
+		})
+
+	_ = runCmd.RegisterFlagCompletionFunc("event",
+		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			if wf := *workflow; wf != "" {
+				if events := engine.WorkflowEvents(wf); len(events) > 0 {
+					return events, noFiles
+				}
+			}
+			return []string{
+				"push\tthe default",
+				"pull_request",
+				"workflow_dispatch\tmanually triggered workflows",
+				"schedule",
+				"release",
+			}, noFiles
+		})
+
+	_ = runCmd.RegisterFlagCompletionFunc("secret-file",
+		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return []string{"secrets", "env"}, cobra.ShellCompDirectiveFilterFileExt
+		})
+
+	_ = runCmd.RegisterFlagCompletionFunc("hold",
+		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+			return []string{"10m", "30m", "1h"}, noFiles
+		})
+
+	// Flags whose values are freeform (KEY=value, label=image, key:value) get
+	// no candidates, but must still suppress filename completion: offering
+	// files for `--secret` would only ever be wrong.
+	for _, name := range []string{"secret", "platform", "matrix"} {
+		_ = runCmd.RegisterFlagCompletionFunc(name,
+			func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+				return nil, noFiles
+			})
+	}
 }
 
 // Execute runs the CLI and returns a process exit code.

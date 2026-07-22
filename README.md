@@ -171,6 +171,32 @@ step by id, then name, never by position (which shifts when you edit the file).
 | `--matrix python:3.12` | debug one matrix leg instead of all of them |
 | `--reuse` | keep the container so build caches survive |
 
+`fermata run --help` has worked examples for each of these.
+
+### Tab completion
+
+Worth setting up: `--break` takes an exact step name, and completion reads
+your workflow and offers the real ones instead of making you copy strings out
+of the YAML.
+
+```sh
+source <(fermata completion bash)     # or zsh, fish, powershell
+```
+
+```
+$ fermata run -W .github/workflows/ci.yml --break <TAB>
+actions/checkout@v4    (test)
+Run tests              (test)
+build                  (test)
+```
+
+The description in brackets is the job the step belongs to. A step that has an
+`id:` is offered by its id, because that survives you renaming the step.
+
+`-W` completes to the workflows in `.github/workflows/`, and `--event` to the
+events your workflow actually declares. Add the `source` line to your shell
+profile to keep it.
+
 <details>
 <summary><b>Running without a terminal (CI, scripts)</b></summary>
 
