@@ -2,7 +2,7 @@ class Fermata < Formula
   desc "Debugger for GitHub Actions: pause a failing workflow, fix it, retry one step"
   homepage "https://github.com/aradar46/fermata"
   url "https://github.com/aradar46/fermata/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "aceb213c08aeb5d66b4aee9cfdc082672ff7e26cc9628e2815acebd6b9246260"
+  sha256 "40b722c411f387c9bab5412827826d1988d7e363a3963e5d170879a821a9ad95"
   license "MIT"
   head "https://github.com/aradar46/fermata.git", branch: "main"
 
