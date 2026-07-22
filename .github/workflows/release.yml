@@ -53,20 +53,119 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            **Linux** — download a binary below, then:
+            Fermata pauses a failing GitHub Actions workflow locally, lets you
+            look inside the live container, fix the problem, and re-run just
+            the broken step.
+
+            ## Install
+
+            **Linux.** Download a binary below, then:
 
                 chmod +x fermata-linux-amd64
                 sudo mv fermata-linux-amd64 /usr/local/bin/fermata
 
-            **macOS, Windows, or from source** — clone and build (Go 1.25+):
+            **macOS.** Homebrew, which compiles it on your machine:
+
+                brew install aradar46/tap/fermata
+
+            **Windows, or from source.** Go 1.26+:
 
                 git clone https://github.com/aradar46/fermata && cd fermata
                 git checkout ${{ github.ref_name }}
-                go build -o fermata .
+                go build -ldflags "-X github.com/aradar46/fermata/cmd.version=${{ github.ref_name }}" -o fermata .
 
-            Note: `go install` does not work for this project. Fermata vendors a
-            patched act via a `replace` directive, which Go rejects outside a
-            main module. Build from a clone instead.
+            Requires a running Docker daemon.
 
-            See [CHANGELOG.md](CHANGELOG.md) for what is in this release, and
-            the README for the known limits.
+            No macOS or Windows binaries are published: neither can be
+            exercised end to end before release, because neither runs the
+            Linux containers Fermata drives. The brew formula builds from
+            source instead, so nothing untested is shipped.
+
+            `go install` does not work here. Go rejects any module with a
+            `replace` directive, and Fermata uses one to wire in its patched
+            act. The README explains why keeping it is the deliberate choice.
+
+            ## What is in it
+
+            See [CHANGELOG.md](https://github.com/aradar46/fermata/blob/main/CHANGELOG.md).
+            The README lists the known limits, including what cannot run
+            locally at all.
+
+  # The brew formula pins the source tarball by tag and checksum. Tagging a
+  # release changes both, so without this the formula keeps pointing at the
+  # previous version and `brew install` fails checksum verification against
+  # the new tarball. That is a silent break: nothing in this repo's CI would
+  # catch it, because the formula lives in another repo.
+  bump-formula:
+    name: Update the Homebrew formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute the release tarball checksum
+        id: sha
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${VERSION}.tar.gz"
+          # The tarball is generated on demand and can lag the tag by a few
+          # seconds, so retry rather than racing it.
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL "$url" -o source.tar.gz; then break; fi
+            echo "tarball not ready (attempt $attempt), waiting"
+            sleep 10
+          done
+          checksum=$(sha256sum source.tar.gz | cut -d' ' -f1)
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+          echo "$VERSION -> $checksum"
+
+      - name: Update the formula in this repo
+        env:
+          VERSION: ${{ github.ref_name }}
+          CHECKSUM: ${{ steps.sha.outputs.checksum }}
+        run: |
+          f=packaging/homebrew/fermata.rb
+          sed -i -E "s|(archive/refs/tags/)[^\"]+(\.tar\.gz)|\1${VERSION}\2|" "$f"
+          sed -i -E "s|^(  sha256 \")[a-f0-9]{64}(\")|\1${CHECKSUM}\2|" "$f"
+          grep -E 'url |sha256 ' "$f"
+          # Fail loudly if the substitution silently matched nothing.
+          grep -q "${CHECKSUM}" "$f"
+          grep -q "${VERSION}.tar.gz" "$f"
+
+      - name: Commit the formula back to main
+        run: |
+          if git diff --quiet; then
+            echo "formula already current"
+            exit 0
+          fi
+          git config user.name "Aradar"
+          git config user.email "hello@aradar.top"
+          git add packaging/homebrew/fermata.rb
+          git commit -m "chore: point the formula at ${GITHUB_REF_NAME}"
+          git push origin HEAD:main
+
+      - name: Mirror the formula into the tap
+        env:
+          # A token with contents:write on aradar46/homebrew-tap. The default
+          # GITHUB_TOKEN is scoped to this repository only and cannot push
+          # there.
+          TAP_TOKEN: ${{ secrets.TAP_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::error::TAP_TOKEN is not set; the tap still points at the previous release."
+            exit 1
+          fi
+          git clone --quiet \
+            "https://x-access-token:${TAP_TOKEN}@github.com/aradar46/homebrew-tap.git" tap
+          cp packaging/homebrew/fermata.rb tap/Formula/fermata.rb
+          cd tap
+          if git diff --quiet; then
+            echo "tap already current"
+            exit 0
+          fi
+          git config user.name "Aradar"
+          git config user.email "hello@aradar.top"
+          git commit -am "fermata ${VERSION}"
+          git push origin main
